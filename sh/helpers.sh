@@ -74,7 +74,7 @@ chafa_run() {
 	format='-f symbols'
 	autochafa && format=
 	chafasixel && format='-f sixels'
-	chafa -s "${w}x${h}" $format "$1" | sed 's/#/\n#/g'
+	chafa -s "${w}x${h}" $format "$1" --polite=on | sed 's/#/\n#/g'
 }
 
 setup_fifo() {

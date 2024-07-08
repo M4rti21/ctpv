@@ -1,22 +1,22 @@
-#include <stdio.h>
-#include <magic.h>
 #include <fcntl.h>
+#include <magic.h>
+#include <openssl/md5.h>
+#include <signal.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
-#include <unistd.h>
 #include <sys/stat.h>
-#include <openssl/md5.h>
+#include <unistd.h>
 
+#include "../gen/help.h"
+#include "../previews.h"
+#include "../version.h"
+#include "config.h"
 #include "ctpv.h"
 #include "error.h"
-#include "utils.h"
-#include "config.h"
-#include "server.h"
 #include "preview.h"
-#include "../version.h"
-#include "../previews.h"
-#include "../gen/help.h"
+#include "server.h"
+#include "utils.h"
 
 struct InputFile {
     char link[PATH_MAX], path[PATH_MAX];
@@ -32,8 +32,7 @@ static Parser *parser;
 
 static VectorPreview *previews;
 
-static void cleanup(void)
-{
+static void cleanup(void) {
     previews_cleanup();
     if (parser)
         config_cleanup(parser);
@@ -43,8 +42,7 @@ static void cleanup(void)
         vectorPreview_free(previews);
 }
 
-static RESULT init_magic(void)
-{
+static RESULT init_magic(void) {
     ERRCHK_RET_MSG(!(magic = magic_open(MAGIC_MIME_TYPE)), magic_error(magic));
 
     ERRCHK_RET_MSG(magic_load(magic, NULL) != 0, magic_error(magic));
@@ -52,8 +50,7 @@ static RESULT init_magic(void)
     return OK;
 }
 
-static RESULT create_dir(char *buf, size_t len)
-{
+static RESULT create_dir(char *buf, size_t len) {
     char dir[len];
     strncpy(dir, buf, LEN(dir) - 1);
     ERRCHK_RET_ERN(mkpath(dir, 0700) == -1);
@@ -61,8 +58,7 @@ static RESULT create_dir(char *buf, size_t len)
     return OK;
 }
 
-static RESULT get_config_file(char *buf, size_t len)
-{
+static RESULT get_config_file(char *buf, size_t len) {
     ERRCHK_RET_OK(get_config_dir(buf, len, "ctpv/"));
     ERRCHK_RET_OK(create_dir(buf, len));
 
@@ -74,8 +70,7 @@ static RESULT get_config_file(char *buf, size_t len)
     return OK;
 }
 
-static RESULT config(int prevs)
-{
+static RESULT config(int prevs) {
     char config_file[FILENAME_MAX];
     ERRCHK_RET_OK(get_config_file(config_file, LEN(config_file)));
 
@@ -84,8 +79,7 @@ static RESULT config(int prevs)
     return OK;
 }
 
-static RESULT init_previews(void)
-{
+static RESULT init_previews(void) {
     /* 20 is some arbitrary number, it's here in order to
      * to save one realloc() if user has less then 20 custom previews */
     previews = vectorPreview_new(LEN(b_previews) + 20);
@@ -98,8 +92,7 @@ static RESULT init_previews(void)
     return OK;
 }
 
-static const char *get_mimetype(const char *path)
-{
+static const char *get_mimetype(const char *path) {
     const char *r = magic_file(magic, path);
     if (!r) {
         FUNCFAILED("magic_file", magic_error(magic));
@@ -109,13 +102,11 @@ static const char *get_mimetype(const char *path)
     return r;
 }
 
-static inline void file_access_err(char *f, int errno_)
-{
+static inline void file_access_err(char *f, int errno_) {
     print_errorf("failed to access '%s': %s", f, strerror(errno_));
 }
 
-static RESULT get_input_file(struct InputFile *input_f, char *f)
-{
+static RESULT get_input_file(struct InputFile *input_f, char *f) {
     if (!f) {
         print_error("file not given");
         return ERR;
@@ -139,8 +130,7 @@ static RESULT get_input_file(struct InputFile *input_f, char *f)
     return OK;
 }
 
-static RESULT is_newer(int *resp, char *f1, char *f2)
-{
+static RESULT is_newer(int *resp, char *f1, char *f2) {
     struct stat stat1, stat2;
     ERRCHK_RET_ERN(lstat(f1, &stat1) == -1);
     ERRCHK_RET_ERN(lstat(f2, &stat2) == -1);
@@ -167,8 +157,7 @@ older:
     return OK;
 }
 
-static void md5_string(char *buf, size_t len, char *s)
-{
+static void md5_string(char *buf, size_t len, char *s) {
     unsigned char out[MD5_DIGEST_LENGTH];
     char b[16];
 
@@ -176,14 +165,13 @@ static void md5_string(char *buf, size_t len, char *s)
 
     buf[0] = '\0';
     for (unsigned int i = 0; i < LEN(out); i++) {
-        snprintf(b, LEN(b)-1, "%02x", out[i]);
+        snprintf(b, LEN(b) - 1, "%02x", out[i]);
         strncat(buf, b, len);
     }
 }
 
 static RESULT get_cache_file(char *dir, size_t dir_len, char *filename,
-                             size_t filename_len, char *file)
-{
+                             size_t filename_len, char *file) {
     ERRCHK_RET_OK(get_cache_dir(dir, dir_len, "ctpv/"));
     ERRCHK_RET_OK(create_dir(dir, dir_len));
 
@@ -194,13 +182,12 @@ static RESULT get_cache_file(char *dir, size_t dir_len, char *filename,
     md5_string(filename + dir_str_len, filename_len - dir_str_len - 1, file);
 
     /* Remove dash at the end */
-    dir[dir_str_len-1] = '\0';
+    dir[dir_str_len - 1] = '\0';
 
     return OK;
 }
 
-static RESULT check_cache(int *resp, char *file, char *cache_file)
-{
+static RESULT check_cache(int *resp, char *file, char *cache_file) {
     if (access(cache_file, F_OK) != 0) {
         *resp = 0;
         return OK;
@@ -211,8 +198,7 @@ static RESULT check_cache(int *resp, char *file, char *cache_file)
 
 #define GET_PARG(a, i) (a) = (argc > (i) ? argv[i] : NULL)
 
-static RESULT preview(int argc, char *argv[])
-{
+static RESULT preview(int argc, char *argv[]) {
     char *f, *w, *h, *x, *y, *id;
     char w_buf[24], h_buf[24], y_buf[24];
     long w_l, h_l, y_l;
@@ -288,25 +274,19 @@ static RESULT preview(int argc, char *argv[])
     return preview_run(get_ext(input_f.path), mimetype, &args);
 }
 
-static RESULT server(void)
-{
-    return server_listen(ctpv.server_id_s);
-}
+static RESULT server(void) { return server_listen(ctpv.server_id_s); }
 
-static RESULT clear(void)
-{
+static RESULT clear(void) {
     ERRCHK_RET_OK(config(0));
     return server_clear(ctpv.server_id_s);
 }
 
-static RESULT end(void)
-{
+static RESULT end(void) {
     ERRCHK_RET_OK(config(0));
     return server_end(ctpv.server_id_s);
 }
 
-static RESULT list(void)
-{
+static RESULT list(void) {
     ERRCHK_RET_OK(init_previews());
 
     size_t len;
@@ -365,8 +345,7 @@ static RESULT list(void)
     return OK;
 }
 
-static RESULT mime(int argc, char *argv[])
-{
+static RESULT mime(int argc, char *argv[]) {
     const char *mimetype;
     struct InputFile input_f;
 
@@ -393,21 +372,18 @@ static RESULT mime(int argc, char *argv[])
     return OK;
 }
 
-static RESULT help(void)
-{
+static RESULT help(void) {
     printf("Usage: %s [OPTION]... FILE\n\n", program);
     printf("Options:\n%s", help_txt);
     return OK;
 }
 
-static RESULT version(void)
-{
+static RESULT version(void) {
     printf("%s version %s\n", program, VERSION);
     return OK;
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     program = argc > 0 ? argv[0] : "ctpv";
 
     ctpv.opts.shell = "/bin/sh";
